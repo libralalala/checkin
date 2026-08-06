@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中友百貨 100m 限定打卡系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="h-full bg-slate-900 flex items-center justify-center p-4 text-slate-800">
+
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 relative">
+        
+        <!-- Header Section -->
+        <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-800 p-6 text-white text-center relative">
+            <div class="absolute top-4 right-4 bg-white/20 backdrop-blur-md rounded-full px-3 py-1 text-xs font-medium flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="device-type-badge">PC / 手機雙模支援</span>
+            </div>
+            <div class="w-14 h-14 bg-white/10 rounded-2xl mx-auto flex items-center justify-center mb-3 backdrop-blur-md border border-white/20 shadow-inner">
+                <i class="fa-solid fa-location-dot text-3xl text-emerald-300"></i>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight">智慧打卡驗證系統</h1>
+            <p class="text-blue-100 text-xs mt-1">地理限制：<span id="header-target-name">台中中友百貨</span> (<span id="header-target-radius">100</span>m 內)</p>
+        </div>
+
+        <!-- In-App Browser Alert (Hidden by default, shown if opened in LINE/Telegram/FB) -->
+        <div id="inapp-browser-warning" class="hidden bg-amber-500 text-white px-4 py-3 text-xs font-medium flex items-center justify-between gap-2 shadow-inner">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-base shrink-0"></i>
+                <span>偵測到內建瀏覽器，GPS 可能受限。建議點擊右上角 <i class="fa-solid fa-ellipsis-vertical"></i> 選擇<b>「以 Safari / Chrome 開啟」</b></span>
+            </div>
+            <button onclick="document.getElementById('inapp-browser-warning').classList.add('hidden')" class="text-white/80 hover:text-white shrink-0">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Clock & Info Banner -->
+        <div class="bg-slate-50 px-6 py-3.5 border-b border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    <i class="fa-regular fa-clock text-base"></i>
+                </div>
+                <div>
+                    <div id="current-date" class="text-[11px] text-slate-500 font-medium">載入日期...</div>
+                    <div id="current-time" class="text-lg font-bold text-slate-800 tracking-wider">00:00:00</div>
+                </div>
+            </div>
+            <div class="text-right">
+                <span id="location-badge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-200 text-slate-600 flex items-center gap-1">
+                    <i class="fa-solid fa-spinner animate-spin text-[10px]"></i> 檢查定位中
+                </span>
+            </div>
+        </div>
+
+        <!-- GPS Real-Time Status Card -->
+        <div class="mx-6 mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-crosshairs text-blue-500"></i> 當前 GPS 驗證狀態
+                </span>
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="openSettingsModal()" class="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold px-2.5 py-1 rounded-lg transition flex items-center gap-1 border border-indigo-200/60" title="自訂地點與距離">
+                        <i class="fa-solid fa-gear text-[10px]"></i> 設定目標
+                    </button>
+                    <button type="button" onclick="openPermissionModal()" class="text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold px-2 py-1 rounded-lg transition flex items-center gap-1 border border-amber-200/60" title="定位診斷指南">
+                        <i class="fa-solid fa-wrench text-[10px]"></i> 診斷
+                    </button>
+                    <button type="button" onclick="detectGPSLocation(true)" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold px-2 py-1 rounded-lg transition flex items-center gap-1">
+                        <i class="fa-solid fa-rotate-right text-[10px]"></i> 測距
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+                    <div class="text-slate-400 text-[10px] font-medium">目標地點</div>
+                    <div id="target-location-name-display" class="font-semibold text-slate-800 truncate">台中中友百貨</div>
+                </div>
+                <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+                    <div class="text-slate-400 text-[10px] font-medium">目前距離 (限 <span id="target-radius-display">100</span>m)</div>
+                    <div id="distance-display" class="font-bold text-slate-800">檢測中...</div>
+                </div>
+            </div>
+
+            <!-- Latitude & Longitude Display Box -->
+            <div class="bg-white p-3 rounded-xl border border-slate-100 space-y-1">
+                <div class="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                    <span><i class="fa-solid fa-map-pin text-rose-500"></i> 當前實時經緯度 (Lat, Lng)</span>
+                    <span id="gps-accuracy-tag" class="text-slate-400">誤差檢測中</span>
+                </div>
+                <div id="latlng-display" class="font-mono font-bold text-xs text-slate-700 bg-slate-50 p-2 rounded-lg text-center tracking-wide border border-slate-200/60">
+                    正在獲取經緯度數據...
+                </div>
+            </div>
+
+            <div id="gps-coords-detail" class="text-[11px] text-slate-500 bg-white/60 p-2 rounded-lg font-mono truncate border border-slate-100 flex items-center justify-between">
+                <span id="coords-text">點擊「重新測距」發起定位驗證</span>
+            </div>
+
+            <!-- Permission Warning Banner when denied or failed -->
+            <div id="permission-denied-alert" class="hidden p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation text-rose-500 text-sm shrink-0"></i>
+                    <span id="permission-alert-msg">定位失敗，請確認權限與 GPS 總開關</span>
+                </div>
+                <button type="button" onclick="openPermissionModal()" class="underline font-bold text-rose-800 hover:text-rose-900 text-[11px] shrink-0">
+                    排查步驟 »
+                </button>
+            </div>
+        </div>
+
+        <!-- Form Section -->
+        <form id="checkin-form" class="p-6 pt-4 space-y-4" onsubmit="handleCheckin(event)">
+            
+            <div class="space-y-1.5">
+                <label class="block text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-id-badge text-blue-500 text-xs"></i> 員工代號 / 編號
+                </label>
+                <input type="text" id="entry-input" required 
+                    placeholder="例如: 001" value="001"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-slate-800 bg-slate-50/50">
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="block text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-clipboard-user text-blue-500 text-xs"></i> 打卡類別
+                </label>
+                <select id="status-select" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-slate-800 bg-slate-50/50">
+                    <option value="上班打卡">上班打卡</option>
+                    <option value="下班打卡">下班打卡</option>
+                    <option value="外出打卡">外出打卡</option>
+                </select>
+            </div>
+
+            <!-- Submit button -->
+            <button type="submit" id="submit-btn" class="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 transition-all transform active:scale-95 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-location-arrow"></i>
+                <span id="btn-text">驗證位置並打卡</span>
+            </button>
+        </form>
+
+        <div class="px-6 pb-5 text-center">
+            <p id="bottom-notice-text" class="text-xs text-slate-400">注意：系統會核對經緯度與目標距離，超出範圍無法打卡。</p>
+        </div>
+    </div>
+
+    <!-- Custom Target Location & Distance Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden transition-opacity opacity-0">
+        <div class="bg-white rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden border border-slate-100 transform transition-all scale-95 duration-200" id="settings-modal-content">
+            <div class="bg-gradient-to-r from-indigo-600 to-violet-700 p-5 text-white relative">
+                <button type="button" onclick="closeSettingsModal()" class="absolute top-4 right-4 text-white/80 hover:text-white bg-black/10 rounded-full w-7 h-7 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-xl shrink-0">
+                        <i class="fa-solid fa-sliders"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg leading-tight">自訂打卡目標地點</h3>
+                        <p class="text-indigo-100 text-xs">設定允許打卡的經緯度與距離限制</p>
+                    </div>
+                </div>
+            </div>
+
+            <form onsubmit="saveTargetSettings(event)" class="p-5 space-y-3.5 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                        <i class="fa-solid fa-building text-indigo-500"></i> 目標地點名稱
+                    </label>
+                    <input type="text" id="setting-target-name" required placeholder="例如: 中友百貨 / 總部大樓" class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                            <i class="fa-solid fa-map-pin text-rose-500"></i> 目標緯度 (Lat)
+                        </label>
+                        <input type="number" step="any" id="setting-target-lat" required placeholder="24.152422" class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                            <i class="fa-solid fa-map-pin text-rose-500"></i> 目標經度 (Lng)
+                        </label>
+                        <input type="number" step="any" id="setting-target-lng" required placeholder="120.684841" class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                        <i class="fa-solid fa-ruler-horizontal text-emerald-500"></i> 允許最大距離 radius (公尺)
+                    </label>
+                    <input type="number" min="5" max="50000" id="setting-target-radius" required placeholder="100" class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800">
+                    <p class="text-[10px] text-slate-400 mt-1">例如：100 表示離目標點 100 公尺之內才能打卡</p>
+                </div>
+
+                <div class="pt-1 flex gap-2">
+                    <button type="button" onclick="setPresetCurrentLocation()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition flex items-center justify-center gap-1 text-[11px]">
+                        <i class="fa-solid fa-location-crosshairs text-indigo-600"></i> 以目前位置設為目標
+                    </button>
+                    <button type="button" onclick="resetToChungYoDefault()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-500 font-medium rounded-xl transition text-[11px]">
+                        恢復預設
+                    </button>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-floppy-disk"></i> 儲存目標設定
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Location & Privacy Settings Diagnostic Modal -->
+    <div id="permission-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden transition-opacity opacity-0">
+        <div class="bg-white rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden border border-slate-100 transform transition-all scale-95 duration-200" id="permission-modal-content">
+            
+            <div class="bg-gradient-to-r from-amber-500 to-orange-600 p-5 text-white relative">
+                <button type="button" onclick="closePermissionModal()" class="absolute top-4 right-4 text-white/80 hover:text-white bg-black/10 rounded-full w-7 h-7 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-xl shrink-0">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg leading-tight">定位排查與診斷指南</h3>
+                        <p class="text-amber-100 text-xs">為何打開權限後依然無法定位？</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-5 space-y-4 text-xs text-slate-600 max-h-[75vh] overflow-y-auto">
+                <div class="bg-amber-50 text-amber-900 p-3 rounded-xl border border-amber-200/80 leading-relaxed space-y-1.5">
+                    <div class="font-bold flex items-center gap-1.5 text-amber-800">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> 三大最常見無法抓到距離的原因：
+                    </div>
+                    <ol class="list-decimal pl-4 space-y-1 text-[11px]">
+                        <li><b>手機系統定位總開關關閉</b>（非僅瀏覽器）</li>
+                        <li><b>位處室內/地下室，衛星訊號被遮蔽</b>（請開啟 Wi-Fi 輔助定位）</li>
+                        <li><b>使用 LINE / Telegram 等 App 內建瀏覽器</b></li>
+                    </ol>
+                </div>
+
+                <!-- OS Selector Tabs -->
+                <div class="flex border-b border-slate-200">
+                    <button type="button" id="tab-btn-check" onclick="switchGuideTab('check')" class="flex-1 py-2 font-bold text-center border-b-2 border-blue-600 text-blue-600 text-[11px]">
+                        <i class="fa-solid fa-list-check"></i> 1. 系統檢查
+                    </button>
+                    <button type="button" id="tab-btn-pc" onclick="switchGuideTab('pc')" class="flex-1 py-2 font-semibold text-center border-b-2 border-transparent text-slate-400 hover:text-slate-600 text-[11px]">
+                        <i class="fa-desktop fa-solid"></i> Windows PC
+                    </button>
+                    <button type="button" id="tab-btn-ios" onclick="switchGuideTab('ios')" class="flex-1 py-2 font-semibold text-center border-b-2 border-transparent text-slate-400 hover:text-slate-600 text-[11px]">
+                        <i class="fa-brands fa-apple"></i> iOS
+                    </button>
+                    <button type="button" id="tab-btn-android" onclick="switchGuideTab('android')" class="flex-1 py-2 font-semibold text-center border-b-2 border-transparent text-slate-400 hover:text-slate-600 text-[11px]">
+                        <i class="fa-brands fa-android"></i> Android
+                    </button>
+                </div>
+
+                <!-- Tab Content: System Check -->
+                <div id="tab-content-check" class="space-y-2.5 pt-1">
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70 space-y-2">
+                        <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-toggle-on text-emerald-500"></i> 步驟 1：開啟系統 GPS / 位置總開關
+                        </div>
+                        <p class="text-[11px] text-slate-500">iPhone/Windows：「設定」>「隱私權」>「位置」開啟。<br>Android：下拉快捷選單，將<b>「位置資訊」</b>圖示點亮。</p>
+                    </div>
+
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70 space-y-2">
+                        <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-wifi text-blue-500"></i> 步驟 2：開啟 Wi-Fi (即使沒連線)
+                        </div>
+                        <p class="text-[11px] text-slate-500">桌上型電腦或筆電無 GPS 晶片時，開啟 Wi-Fi 能讓 Windows / Google 比對周邊熱點達成高精度定位。</p>
+                    </div>
+
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70 space-y-2">
+                        <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-compass text-amber-500"></i> 步驟 3：用 Chrome / Edge 開啟
+                        </div>
+                        <p class="text-[11px] text-slate-500">避免在 LINE 或 Telegram 內建視窗直接打卡，點選右上角選單<b>「在預設瀏覽器開啟」</b>最穩定。</p>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Windows PC -->
+                <div id="tab-content-pc" class="space-y-2.5 pt-1 hidden">
+                    <div class="bg-blue-50 text-blue-900 p-2.5 rounded-xl border border-blue-200 text-[11px] leading-relaxed">
+                        <div class="font-bold mb-1 flex items-center gap-1">
+                            <i class="fa-solid fa-desktop"></i> PC 定位特點說明：
+                        </div>
+                        傳統有線桌上型電腦沒有 Wi-Fi 與 GPS，系統會自動切換為 IP 備援定位。IP 定位誤差較大（數公里），建議改用<b>筆記型電腦 (開啟 Wi-Fi)</b> 或<b>手機</b>進行現場打卡。
+                    </div>
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+                        <span>按 `Win + I` 開啟 Windows **設定** > **隱私權與安全性** > **位置**。</span>
+                    </div>
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+                        <span>將 **「位置服務」** 切換為 **開啟**，並允許 Chrome / Edge 存取位置。</span>
+                    </div>
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+                        <span>**開發者測試**：按 `F12` > 按 `Esc` 打開 Sensors 面板 > Location 選擇 Custom 輸入中友座標 (24.152422, 120.684841) 即可測試。</span>
+                    </div>
+                </div>
+
+                <!-- Tab Content: iOS -->
+                <div id="tab-content-ios" class="space-y-2.5 pt-1 hidden">
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+                        <span>打開 iPhone **「設定」** > **「隱私權與安全性」** > **「定位服務」** (確保頂部總開關為開啟)。</span>
+                    </div>
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+                        <span>在下方清單找到 **「Safari 網站」**。</span>
+                    </div>
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+                        <span>設為 **「使用 App 期間」**，並務必開啟 **「準確位置」** 開關。</span>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Android -->
+                <div id="tab-content-android" class="space-y-2.5 pt-1 hidden">
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+                        <span>確定手機已下拉開啟 **「位置資訊」** 圖示。</span>
+                    </div>
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+                        <span>點擊 Chrome 網址列左側的 **🔒 或 🎛️ 設定圖示** > **「權限」**。</span>
+                    </div>
+                    <div class="flex gap-2.5 items-start">
+                        <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+                        <span>將 **「位置」** 權限設定改為 **「允許」** 並勾選高精確度。</span>
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="button" onclick="requestPermissionRetry()" class="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-satellite-dish"></i> 重新觸發與重新測距
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden iframe for silent Google Form submission -->
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
+    <!-- Hidden Form submitting to Google Form Response endpoint -->
+    <form id="google-sheet-form" action="https://docs.google.com/forms/d/e/1FAIpQLScynjT1lg4HmiqpG9JNXmJ7hNKJPAYlDfyXP3OXI39H2wZ01Q/formResponse" method="POST" target="hidden_iframe" style="display:none;">
+        <input type="text" name="entry.1312115198" id="hidden-entry-input">
+    </form>
+
+    <script>
+        // Target Location Variables (Default: 台中中友百貨, editable via settings)
+        let targetName = "台中中友百貨";
+        let targetLat = 24.152422;
+        let targetLng = 120.684841;
+        let maxAllowedDistanceMeters = 100;
+
+        // Telegram Bot credentials
+        const TELEGRAM_BOT_TOKEN = '8974600290:AAFsja-sjPLlxh-zGfzEWwgOqiBLUH1Q6og';
+        const TELEGRAM_CHAT_ID = '484036859';
+
+        let currentDistanceMeters = null;
+        let currentLatitude = null;
+        let currentLongitude = null;
+        let isGpsReady = false;
+
+        // Load saved settings from localStorage
+        function loadSettings() {
+            const savedName = localStorage.getItem('checkin_target_name');
+            const savedLat = localStorage.getItem('checkin_target_lat');
+            const savedLng = localStorage.getItem('checkin_target_lng');
+            const savedRadius = localStorage.getItem('checkin_target_radius');
+
+            if (savedName) targetName = savedName;
+            if (savedLat) targetLat = parseFloat(savedLat);
+            if (savedLng) targetLng = parseFloat(savedLng);
+            if (savedRadius) maxAllowedDistanceMeters = parseInt(savedRadius, 10);
+
+            updateTargetUI();
+        }
+
+        function updateTargetUI() {
+            document.getElementById('header-target-name').textContent = targetName;
+            document.getElementById('header-target-radius').textContent = maxAllowedDistanceMeters;
+            document.getElementById('target-location-name-display').textContent = targetName;
+            document.getElementById('target-radius-display').textContent = maxAllowedDistanceMeters;
+            document.getElementById('bottom-notice-text').textContent = `注意：系統會嚴格核對經緯度與 ${targetName} 距離，超出 ${maxAllowedDistanceMeters}m 無法打卡。`;
+
+            // Update modal inputs
+            document.getElementById('setting-target-name').value = targetName;
+            document.getElementById('setting-target-lat').value = targetLat;
+            document.getElementById('setting-target-lng').value = targetLng;
+            document.getElementById('setting-target-radius').value = maxAllowedDistanceMeters;
+        }
+
+        function openSettingsModal() {
+            const modal = document.getElementById('settings-modal');
+            const content = document.getElementById('settings-modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeSettingsModal() {
+            const modal = document.getElementById('settings-modal');
+            const content = document.getElementById('settings-modal-content');
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        function saveTargetSettings(e) {
+            e.preventDefault();
+            targetName = document.getElementById('setting-target-name').value.trim() || "自訂地點";
+            targetLat = parseFloat(document.getElementById('setting-target-lat').value);
+            targetLng = parseFloat(document.getElementById('setting-target-lng').value);
+            maxAllowedDistanceMeters = parseInt(document.getElementById('setting-target-radius').value, 10) || 100;
+
+            localStorage.setItem('checkin_target_name', targetName);
+            localStorage.setItem('checkin_target_lat', targetLat);
+            localStorage.setItem('checkin_target_lng', targetLng);
+            localStorage.setItem('checkin_target_radius', maxAllowedDistanceMeters);
+
+            updateTargetUI();
+            closeSettingsModal();
+            showCustomToast(`已將目標更新為「${targetName}」(${maxAllowedDistanceMeters}m)`, 'success');
+            detectGPSLocation(false);
+        }
+
+        async function setPresetCurrentLocation() {
+            showCustomToast('讀取目前 GPS 位置中...', 'warning');
+            try {
+                const { position } = await getAccuratePositionWithFallback();
+                document.getElementById('setting-target-lat').value = position.coords.latitude.toFixed(6);
+                document.getElementById('setting-target-lng').value = position.coords.longitude.toFixed(6);
+                if (!document.getElementById('setting-target-name').value || document.getElementById('setting-target-name').value === "台中中友百貨") {
+                    document.getElementById('setting-target-name').value = "當前現場位置";
+                }
+                showCustomToast('已帶入目前 GPS 座標！請點擊「儲存目標設定」', 'success');
+            } catch (err) {
+                showCustomToast('無法取得目前 GPS，請先確認定位權限已開啟', 'danger');
+            }
+        }
+
+        function resetToChungYoDefault() {
+            document.getElementById('setting-target-name').value = "台中中友百貨";
+            document.getElementById('setting-target-lat').value = 24.152422;
+            document.getElementById('setting-target-lng').value = 120.684841;
+            document.getElementById('setting-target-radius').value = 100;
+        }
+
+        // Detect device environment
+        function detectDeviceType() {
+            const ua = navigator.userAgent;
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+            const badge = document.getElementById('device-type-badge');
+            if (badge) {
+                badge.textContent = isMobile ? '📱 手機行動端' : '💻 PC 桌面端';
+            }
+            return isMobile ? 'mobile' : 'pc';
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            document.getElementById('current-date').textContent = `${year}年${month}月${day}日`;
+            document.getElementById('current-time').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Earth's radius in meters
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return Math.round(R * c); // Distance in meters
+        }
+
+        // Multi-tier Fallback GPS Acquisition Function with PC IP Fallback
+        function getAccuratePositionWithFallback() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    return fetchIpPosition().then(resolve).catch(reject);
+                }
+
+                // Attempt 1: High Precision GPS / Wi-Fi Triangulation (6s timeout)
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => resolve({ position: pos, mode: 'GPS 高精度' }),
+                    (err1) => {
+                        console.warn("High accuracy GPS failed, trying low accuracy Wi-Fi/Cell fallback...", err1);
+                        
+                        // Attempt 2: Low Precision (Wi-Fi / Cell Tower triangulation)
+                        navigator.geolocation.getCurrentPosition(
+                            (posFallback) => resolve({ position: posFallback, mode: '網路/Wi-Fi 定位' }),
+                            (err2) => {
+                                console.warn("Wi-Fi positioning failed, attempting PC IP fallback...", err2);
+                                // Attempt 3: PC IP Geolocation Fallback
+                                fetchIpPosition().then(resolve).catch(() => reject(err2));
+                            },
+                            {
+                                enableHighAccuracy: false,
+                                timeout: 8000,
+                                maximumAge: 30000
+                            }
+                        );
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 6000,
+                        maximumAge: 15000
+                    }
+                );
+            });
+        }
+
+        // Tertiary fallback using IP Geolocation API for wired Windows PCs
+        async function fetchIpPosition() {
+            try {
+                const res = await fetch('https://ipwho.is/');
+                const data = await res.json();
+                if (data && data.success && data.latitude && data.longitude) {
+                    return {
+                        position: {
+                            coords: {
+                                latitude: data.latitude,
+                                longitude: data.longitude,
+                                accuracy: 5000 // IP estimated accuracy ~5km
+                            }
+                        },
+                        mode: 'PC IP 定位'
+                    };
+                }
+                throw new Error("IP geolocation failed");
+            } catch (e) {
+                throw { code: 0, message: "PC IP 定位服務回應超時" };
+            }
+        }
+
+        async function detectGPSLocation(showToastNotification = false) {
+            const badge = document.getElementById('location-badge');
+            const distanceDisplay = document.getElementById('distance-display');
+            const latlngDisplay = document.getElementById('latlng-display');
+            const accuracyTag = document.getElementById('gps-accuracy-tag');
+            const coordsDetail = document.getElementById('coords-text');
+            const permissionAlert = document.getElementById('permission-denied-alert');
+            const alertMsg = document.getElementById('permission-alert-msg');
+
+            badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 flex items-center gap-1";
+            badge.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-[10px]"></i> 正在測距中...`;
+            distanceDisplay.textContent = "定位中...";
+            latlngDisplay.textContent = "讀取經緯度中...";
+
+            try {
+                const { position, mode } = await getAccuratePositionWithFallback();
+                
+                permissionAlert.classList.add('hidden');
+                currentLatitude = position.coords.latitude;
+                currentLongitude = position.coords.longitude;
+                const accuracy = Math.round(position.coords.accuracy);
+
+                currentDistanceMeters = calculateDistance(currentLatitude, currentLongitude, targetLat, targetLng);
+                isGpsReady = true;
+
+                // Update Lat/Lng UI display box
+                latlngDisplay.textContent = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+                accuracyTag.textContent = `${mode} (±${accuracy}m)`;
+
+                coordsDetail.textContent = `經緯度: ${currentLatitude.toFixed(5)}, ${currentLongitude.toFixed(5)} (${mode} 誤差±${accuracy}m)`;
+                distanceDisplay.textContent = `${currentDistanceMeters} 公尺`;
+
+                if (currentDistanceMeters <= maxAllowedDistanceMeters) {
+                    badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1";
+                    badge.innerHTML = `<i class="fa-solid fa-circle-check text-[10px]"></i> 符合打卡範圍`;
+                    distanceDisplay.className = "font-bold text-emerald-600";
+                    if (showToastNotification) showCustomToast(`定位成功！距離「${targetName}」${currentDistanceMeters}m`, "success");
+                } else {
+                    badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 flex items-center gap-1";
+                    badge.innerHTML = `<i class="fa-solid fa-circle-xmark text-[10px]"></i> 超出打卡範圍`;
+                    distanceDisplay.className = "font-bold text-rose-600";
+                    if (showToastNotification) showCustomToast(`目前距離「${targetName}」${currentDistanceMeters}m，超出 ${maxAllowedDistanceMeters}m 限制`, "danger");
+                }
+
+            } catch (error) {
+                isGpsReady = false;
+                currentDistanceMeters = null;
+                badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 flex items-center gap-1";
+                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-[10px]"></i> 定位失敗`;
+                distanceDisplay.textContent = "未取得定位";
+                latlngDisplay.textContent = "無法取得經緯度";
+                accuracyTag.textContent = "定位停用";
+                permissionAlert.classList.remove('hidden');
+
+                let errText = "無法取得 GPS/PC 定位";
+                if (error.code === 1 || error.code === error.PERMISSION_DENIED) {
+                    errText = "定位遭拒絕！請開啟系統與瀏覽器定位權限";
+                } else if (error.code === 2 || error.code === error.POSITION_UNAVAILABLE) {
+                    errText = "定位不可用，請開啟 Wi-Fi 輔助或使用手機打卡";
+                } else if (error.code === 3 || error.code === error.TIMEOUT) {
+                    errText = "定位請求超時，請點擊「重新測距」再試一次";
+                }
+
+                alertMsg.textContent = errText;
+                coordsDetail.textContent = errText;
+
+                if (showToastNotification) {
+                    showCustomToast(errText, "danger");
+                    openPermissionModal();
+                }
+            }
+        }
+
+        function switchGuideTab(tab) {
+            ['check', 'pc', 'ios', 'android'].forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const content = document.getElementById(`tab-content-${t}`);
+                if (btn && content) {
+                    if (t === tab) {
+                        btn.className = "flex-1 py-2 font-bold text-center border-b-2 border-blue-600 text-blue-600 text-[11px]";
+                        content.classList.remove('hidden');
+                    } else {
+                        btn.className = "flex-1 py-2 font-semibold text-center border-b-2 border-transparent text-slate-400 hover:text-slate-600 text-[11px]";
+                        content.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        // Auto trigger environment check and GPS detection on page load
+        window.addEventListener('load', () => {
+            loadSettings();
+            detectDeviceType();
+            checkInAppBrowser();
+            detectGPSLocation(false);
+        });
+
+        async function handleCheckin(event) {
+            event.preventDefault();
+
+            const empId = document.getElementById('entry-input').value.trim();
+            const statusVal = document.getElementById('status-select').value;
+
+            if (!empId) {
+                showCustomToast('請輸入員工代號', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('submit-btn');
+            const btnText = document.getElementById('btn-text');
+            btn.disabled = true;
+            btnText.textContent = 'GPS 經緯度校驗中...';
+
+            try {
+                // Refresh GPS location right before submission to ensure strict accuracy
+                const { position } = await getAccuratePositionWithFallback();
+                currentLatitude = position.coords.latitude;
+                currentLongitude = position.coords.longitude;
+                currentDistanceMeters = calculateDistance(currentLatitude, currentLongitude, targetLat, targetLng);
+
+                // STRICT CHECK: Reject if distance > allowed radius
+                if (currentDistanceMeters > maxAllowedDistanceMeters) {
+                    showCustomToast(`打卡失敗！目前距離「${targetName}」${currentDistanceMeters} 公尺 (經緯度: ${currentLatitude.toFixed(5)}, ${currentLongitude.toFixed(5)})，超出 ${maxAllowedDistanceMeters}m 範圍！`, 'danger');
+                    btn.disabled = false;
+                    btnText.textContent = '驗證位置並打卡';
+                    detectGPSLocation(false);
+                    return;
+                }
+
+                // Approved! Proceed with submission
+                btnText.textContent = '提交資料中...';
+
+                const now = new Date();
+                const timeString = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+                const latLngFormatted = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+
+                // Google Form entry string including Target Name, Lat/Lng and Distance
+                const fullValue = `${empId} - ${statusVal} (${targetName} 距離:${currentDistanceMeters}m 經緯度:${latLngFormatted} - ${timeString})`;
+                document.getElementById('hidden-entry-input').value = fullValue;
+
+                // 1. Submit to Google Form
+                document.getElementById('google-sheet-form').submit();
+
+                // 2. Telegram message with verified distance & exact Lat/Lng
+                const tgMessage = `🔔 *【打卡成功通知】*\n\n👤 *員工代號：* \`${empId}\`\n📌 *打卡類別：* \`${statusVal}\`\n📍 *定位地點：* \`${targetName}\` (\`${currentDistanceMeters}m\` / 限制 \`${maxAllowedDistanceMeters}m\`)\n🌐 *打卡經緯度：* \`${latLngFormatted}\`\n⏱ *打卡時間：* \`${timeString}\`\n\n_資料已同步寫入 Google 表單與 Telegram_`;
+
+                try {
+                    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: TELEGRAM_CHAT_ID,
+                            text: tgMessage,
+                            parse_mode: 'Markdown'
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.ok) {
+                        showCustomToast(`打卡成功！(距離「${targetName}」 ${currentDistanceMeters}m)`, 'success');
+                    } else {
+                        showCustomToast('已寫入表單，但 Telegram 通知發送失敗', 'warning');
+                    }
+                } catch (error) {
+                    console.error('Telegram Error:', error);
+                    showCustomToast('已寫入表單 (Telegram 連線超時)', 'success');
+                }
+
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btnText.textContent = '驗證位置並打卡';
+                    detectGPSLocation(false);
+                }, 1500);
+
+            } catch (error) {
+                btn.disabled = false;
+                btnText.textContent = '驗證位置並打卡';
+                showCustomToast('無法取得 GPS 經緯度，請開啟手機定位與 Wi-Fi 後重試', 'danger');
+                openPermissionModal();
+            }
+        }
+
+        function showCustomToast(msg, type = 'warning') {
+            const existing = document.getElementById('toast-msg');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'toast-msg';
+
+            let bgClass = 'bg-amber-600';
+            let iconClass = 'fa-triangle-exclamation';
+
+            if (type === 'success') {
+                bgClass = 'bg-emerald-600';
+                iconClass = 'fa-circle-check';
+            } else if (type === 'danger') {
+                bgClass = 'bg-rose-600';
+                iconClass = 'fa-circle-xmark';
+            }
+
+            toast.className = `fixed top-5 left-1/2 transform -translate-x-1/2 ${bgClass} text-white px-5 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm z-50 transition-all flex items-center gap-2 max-w-[90vw] text-center font-medium`;
+            toast.innerHTML = `<i class="fa-solid ${iconClass} text-base shrink-0"></i><span>${msg}</span>`;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
