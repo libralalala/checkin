@@ -113,6 +113,14 @@
                 <span id="coords-text">點擊「重新測距」發起定位驗證</span>
             </div>
 
+            <!-- Accuracy Warning Banner for indoor/weak GPS signal -->
+            <div id="accuracy-warning-alert" class="hidden p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-wifi text-amber-600 text-sm shrink-0 animate-pulse"></i>
+                    <span>定位誤差較大 (><span id="accuracy-limit-val">50</span>m)。建議<b>開啟手機 Wi-Fi 開關</b>以提高室內精確度。</span>
+                </div>
+            </div>
+
             <!-- Permission Warning Banner when denied or failed -->
             <div id="permission-denied-alert" class="hidden p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -579,6 +587,7 @@
             const accuracyTag = document.getElementById('gps-accuracy-tag');
             const coordsDetail = document.getElementById('coords-text');
             const permissionAlert = document.getElementById('permission-denied-alert');
+            const accuracyAlert = document.getElementById('accuracy-warning-alert');
             const alertMsg = document.getElementById('permission-alert-msg');
 
             badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 flex items-center gap-1";
@@ -593,6 +602,16 @@
                 currentLatitude = position.coords.latitude;
                 currentLongitude = position.coords.longitude;
                 const accuracy = Math.round(position.coords.accuracy);
+
+                // Show accuracy warning if accuracy error is larger than 50 meters
+                if (accuracyAlert) {
+                    if (accuracy > 50) {
+                        accuracyAlert.classList.remove('hidden');
+                        document.getElementById('accuracy-limit-val').textContent = accuracy;
+                    } else {
+                        accuracyAlert.classList.add('hidden');
+                    }
+                }
 
                 currentDistanceMeters = calculateDistance(currentLatitude, currentLongitude, targetLat, targetLng);
                 isGpsReady = true;
@@ -619,6 +638,7 @@
             } catch (error) {
                 isGpsReady = false;
                 currentDistanceMeters = null;
+                if (accuracyAlert) accuracyAlert.classList.add('hidden');
                 badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 flex items-center gap-1";
                 badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-[10px]"></i> 定位失敗`;
                 distanceDisplay.textContent = "未取得定位";
